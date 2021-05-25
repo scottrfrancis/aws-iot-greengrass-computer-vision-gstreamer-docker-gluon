@@ -166,3 +166,8 @@ pip3 install -r requirements.txt
 python3 ./infer.py
 ```
 
+Note the output gives the achieved frame rate and a count of the number of people
+
+```
+2.656 FPS -- 1.0 Persons
+```
