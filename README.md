@@ -22,17 +22,17 @@ The `RUN` command of the `Dockerfile` will install all the packages needed. The 
 
 Note the export of the Time Zone -- the GStreamer install will pause (and fail) if this is not set. 
 
-[ ] set `TZ` to your [time zone](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
+1. set `TZ` to your [time zone](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
 
 the `CMD` provides the exec style params to the `ENTRYPOINT` -- these can be overridden by the docker invocation. Note the `location` parameter giving the RTSP source and the second `location` parameter giving the Docker-side path for the frame results.
 
-[ ] customize the `location` for the `rtspsrc` for your source.
+2. customize the `location` for the `rtspsrc` for your source.
 
 _Make sure you have the right source (IP, port, user, password) by using [VLC](https://www.videolan.org/vlc/) *and* with `telnet`, `nc`, or other from the Docker host to ensure the stream can be accessed._
 
-[ ] (Optional) modify the `location` parameter for the `multifilesink` plugin to set the location of the file that the pipeline will write.
+3. (Optional) modify the `location` parameter for the `multifilesink` plugin to set the location of the file that the pipeline will write.
 
-Now, build the image:
+4. Now, build the image:
 
 ```bash
 docker build --rm -t <name> .
@@ -54,7 +54,7 @@ docker system prune
 
 ### Step 2. Test the Docker Image
 
-Start the docker container with
+1. Start the docker container with
 
 ```bash
 docker run -v /tmp:/data --user "$(id -u):$(id -g)" <name>
@@ -77,14 +77,14 @@ Progress: (request) Sent PLAY request
 Redistribute latency...
 ```
 
-Check the output with
+2. Check the output with
 ```bash
 # modify as needed if you changed the output location
 ls -l /tmp/frame.jpg
 ```
 and observe the user, group, timestamp, etc. 
 
-Open the file in an image viewer and verify correctness.
+3. Open the file in an image viewer and verify correctness.
 _Tip_: on Ubuntu hosts, the command `eog /tmp/frame.jpg` will open a window with the image--it should refresh as the pipeline writes new frames.
 
 _Troubleshooting_
@@ -132,4 +132,37 @@ sudo mount -a
 ```
 
 You may need to `chown` the user/group of the created tmp dir **OR** execute subsequent inference with `sudo` **OR** modify the `fstab` entry to set the user/group.
+
+## Part 2. Build the Greengrass Component
+
+
+## Part 3. Perform inference with a Pretrained model and GluonCV
+
+We can use a pre-trained GluonCV model to detect objects in the frame and then classify those objects. Those predictions (scores, bounding boxes, etc.) can then be used to "Count" the number of detected objects of a class (e.g. "person"). 
+
+Consulting the [Gluon model zoo comparison](https://cv.gluon.ai/model_zoo/detection.html), we select [ssd_512_resnet50_v1_voc](https://cv.gluon.ai/model_zoo/detection.html#id1) as being a good combination of effectively accurate, moderate model size, and was trained with the [Pascal VOC](http://host.robots.ox.ac.uk/pascal/VOC/#history) to predict 20 classes of object--including 'person'. 
+
+These steps follow the [MXNet Tutorial](https://cv.gluon.ai/build/examples_detection/demo_ssd.html#sphx-glr-build-examples-detection-demo-ssd-py) for pre-trainted SSD models.
+
+1. install packages 
+
+```bash
+pip3 install -r requirements.txt
+```
+
+2. configure the parameters of the `infer.py` script. 
+
+| variable | usage |
+| --- | --- |
+| source_file | host-side path of the frame grabbed in Part 1 |
+| max_frame_rate | how 'fast' should the script 'check' for new frames |
+| ctx | use CPU or GPU for model inference |
+
+3. (re)start the gstreamer pipeline if needed as in Part 1
+
+4. run the inference
+
+```bash
+python3 ./infer.py
+```
 
