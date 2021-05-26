@@ -15,6 +15,11 @@ Using Computer Vision models often means acquiring images from RTSP sources. GSt
 _Prerequisites_:
 
 * [Install Docker](https://docs.docker.com/engine/install/)
+* [Install Python 3](https://wiki.python.org/moin/BeginnersGuide/Download) - v 3.6+ recommended - if not already installed
+* A working installation of [AWS IoT Greengrass v2](https://docs.aws.amazon.com/greengrass/index.html)
+* an AWS Account, If you don't have one, see [Set up an AWS account](https://docs.aws.amazon.com/greengrass/v2/developerguide/setting-up.html#set-up-aws-account)
+* AWS CLI v2 [installed](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) and [configured](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html) with permissions to
+    - PUT objects into S3
 
 ### Step 1. Build the Docker image
 
@@ -58,6 +63,8 @@ docker system prune
 
 ```bash
 docker run -v /tmp:/data --user "$(id -u):$(id -g)" <name>
+# adding the -d flag will detach the container's output
+#   stop it with docker stop, but get the running name first with docker container ls
 ```
 
 This will start the container, mapping the host's `/tmp` dir to the container's `/data` dir. New files will be created with the current user/group. 
@@ -135,6 +142,126 @@ You may need to `chown` the user/group of the created tmp dir **OR** execute sub
 
 ## Part 2. Build the Greengrass Component
 
+AWS IoT Greengrass can manage and run a Docker container. If AWS IoT Greengrass v2 is **NOT** already installed, consult [Getting started with AWS IoT Greengrass V2](https://docs.aws.amazon.com/greengrass/v2/developerguide/getting-started.html)
+
+1. archive the docker image 
+
+```bash
+# keeping a local copy of artifacts is generally helpful
+mkdir -p ~/GreengrassCore && cd $_
+
+export component_name=<name for your component>
+export component_version=<version number>
+# example
+# export component_name=com.example.gst-grabber
+# export component_version=1.0.0
+
+# use the name of your docker container created in Part 1
+mkdir -p ~/GreengrassCore/artifacts/$component_name/$component_version
+
+export container_name=<name of your container>
+# example
+# export container_name=gst
+docker save $container_name > ~/GreengrassCore/artifacts/$component_name/$component_version/$container_name.tar
+```
+
+2. (Optional) remove the original image and reload
+
+```bash
+docker image ls $container_name
+# check the output
+
+docker rmi -f $container_name
+
+# recheck images
+docker image ls $container_name
+# should be empty set
+
+docker load -i ~/GreengrassCore/artifacts/$component_name/$component_version/$container_name.tar
+
+# and the container should now be in the list
+docker image ls
+```
+
+3. upload the image to S3
+
+```bash
+# compress the file first, gzip, xz, and bzip are supporteed by Docker for load
+gzip ~/GreengrassCore/artifacts/$component_name/$component_version/$container_name.tar
+
+export bucket_name=<where you want to host your artifacts>
+# for example
+# export region='us-west-2'
+# export acct_num=$(aws sts get-caller-identity --query "Account" --output text)
+# export bucket_name=greengrass-component-artifacts-$acct_num-$region
+
+# create the bucket if needed
+aws s3 mb s3://$bucket_name
+
+# and copy the artifacts to S3
+aws s3 sync ~/GreengrassCore/ s3://$bucket_name/
+```
+
+4. create the recipe for the component
+
+```bash
+mkdir -p ~/GreengrassCore/recipes/
+vim ~/GreengrassCore/recipes/com.example.$component_name-$component_version.json
+```
+
+And enter the following content for the recipe, replacing <paste_bucket_name_here> with the name of the bucket you created earlier. Also replace <component-name>, <component-version>, and <containter-name>
+
+```json
+{
+  "RecipeFormatVersion": "2020-01-25",
+  "ComponentName": "com.example.<component-name>",
+  "ComponentVersion": "1.0.0",
+  "ComponentDescription": "A component that runs a Docker container from an image in an S3 bucket.",
+  "ComponentPublisher": "Amazon",
+  "Manifests": [
+    {
+      "Platform": {
+        "os": "linux"
+      },
+      "Lifecycle": {
+        "Install": {
+          "Script": "docker load -i {artifacts:path}/<container-name>.tar.gz"
+        },
+        "Run": {
+          "Script": "docker run -d -v /tmp/data:/data --user \"$(id -u):$(id -g)\" <container-name>"
+        }
+      },
+      "Artifacts": [
+        {
+          "URI": "s3://<paste_bucket_name_here>/artifacts/com.example.<component-name>/<component-version>/<container-name>.tar.gz"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**NB-** the above run command assumes the RAM disk was set up for `/tmp/data` -- modify it as appropriate for your installation.
+
+
+5. create the GG component with 
+
+```bash
+aws greengrassv2 create-component-version \
+  --inline-recipe fileb://~/GreengrassCore/recipes/$component_name-$component_version.json
+```
+
+**IMPORTANT** 
+must add `ggc_user` to docker group with
+```bash
+sudo usermod -aG docker ggc_user
+```
+
+**AND**
+add the ggc_user to the users group 
+```bash
+usermod -aG users ggc_user
+```
 
 ## Part 3. Perform inference with a Pretrained model and GluonCV
 
@@ -171,3 +298,5 @@ Note the output gives the achieved frame rate and a count of the number of peopl
 ```
 2.656 FPS -- 1.0 Persons
 ```
+
+## Part 4. Create an inference component for Greengrass
