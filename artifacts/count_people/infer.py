@@ -7,7 +7,7 @@ import time
 
 
 max_frame_rate = 30
-source_file = '/tmp/gst/frame.jpg'
+source_file = '/tmp/data/frame.jpg'
 
 
 # load model
@@ -61,7 +61,9 @@ while True:
         frame_cnt += 1
 
         dur = time.time() - start
-        print(f"\r{frame_cnt/dur:05.3f} FPS -- {num_ppl} Persons", end="", flush=True)
+        # print(f"\r{frame_cnt/dur:05.3f} FPS -- {num_ppl} Persons", end="", flush=True)
+        print(f"\r{frame_cnt/dur:05.3f} FPS -- {num_ppl} Persons") 
+        
 
     except Exception as e:
         print(e)

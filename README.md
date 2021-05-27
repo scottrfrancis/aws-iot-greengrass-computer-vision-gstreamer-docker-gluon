@@ -206,7 +206,7 @@ aws s3 sync ~/GreengrassCore/ s3://$bucket_name/
 
 ```bash
 mkdir -p ~/GreengrassCore/recipes/
-vim ~/GreengrassCore/recipes/com.example.$component_name-$component_version.json
+vim ~/GreengrassCore/recipes/$component_name-$component_version.json
 ```
 
 And enter the following content for the recipe, replacing <paste_bucket_name_here> with the name of the bucket you created earlier. Also replace <component-name>, <component-version>, and <containter-name>
@@ -214,7 +214,7 @@ And enter the following content for the recipe, replacing <paste_bucket_name_her
 ```json
 {
   "RecipeFormatVersion": "2020-01-25",
-  "ComponentName": "com.example.<component-name>",
+  "ComponentName": "<component-name>",
   "ComponentVersion": "1.0.0",
   "ComponentDescription": "A component that runs a Docker container from an image in an S3 bucket.",
   "ComponentPublisher": "Amazon",
@@ -233,7 +233,7 @@ And enter the following content for the recipe, replacing <paste_bucket_name_her
       },
       "Artifacts": [
         {
-          "URI": "s3://<paste_bucket_name_here>/artifacts/com.example.<component-name>/<component-version>/<container-name>.tar.gz"
+          "URI": "s3://<paste_bucket_name_here>/artifacts/<component-name>/<component-version>/<container-name>.tar.gz"
         }
       ]
     }
@@ -300,3 +300,111 @@ Note the output gives the achieved frame rate and a count of the number of peopl
 ```
 
 ## Part 4. Create an inference component for Greengrass
+
+1. set env vars for name and version
+
+```bash 
+export component_name=com.example.count_people
+export component_version=1.0.0
+```
+
+2. stage the inference script
+
+```bash
+mkdir -p ~/GreengrassCore/artifacts/$component_name/$component_version
+
+cp artifacts/count_people/* ~/GreengrassCore/artifacts/$component_name/$component_version/
+
+cd ~/GreengrassCore/artifacts/$component_name/$component_version/
+zip -m $component_name.zip *
+```
+
+3. upload script to S3
+
+```bash
+export bucket_name=<where you want to host your artifacts>
+# for example
+# export region='us-west-2'
+# export acct_num=$(aws sts get-caller-identity --query "Account" --output text)
+# export bucket_name=greengrass-component-artifacts-$acct_num-$region
+
+# create the bucket if needed
+aws s3 mb s3://$bucket_name
+
+# and copy the artifacts to S3
+aws s3 sync ~/GreengrassCore/ s3://$bucket_name/
+```
+
+*NB*- if the artifact is updated or changed, 
+
+4. create the recipe for the component
+
+```bash
+mkdir -p ~/GreengrassCore/recipes/
+vim ~/GreengrassCore/recipes/$component_name-$component_version.json
+```
+
+And enter the following content for the recipe, replacing <paste_bucket_name_here> with the name of the bucket you created earlier. Also replace <component-name>, <component-version>, and <containter-name>
+
+```json
+{
+  "RecipeFormatVersion": "2020-01-25",
+  "ComponentName": "<component_name>",
+  "ComponentVersion": "1.0.0",
+  "ComponentDescription": "A component that runs an inference model to count people.",
+  "ComponentPublisher": "Amazon",
+  "Manifests": [
+    {
+      "Platform": {
+        "os": "linux"
+      },
+      "Lifecycle": {
+        "Install": {
+          "Script": "cd {artifacts:decompressedPath}/<component_name> && ./install.sh",
+          "RequiresPrivilege": true
+          
+        },
+        "Run": {
+          "Script": "python3 {artifacts:decompressedPath}/<component_name>/infer.py"
+        }
+      },
+      "Artifacts": [
+        {
+          "URI": "s3://<paste_bucket_name_here>/artifacts/<component_name>/1.0.0/<component_name>.zip",
+          "Unarchive": "ZIP"
+        }
+      ]
+    }
+  ]
+}
+```
+
+5. create the GG component with 
+
+```bash
+aws greengrassv2 create-component-version --inline-recipe fileb://~/GreengrassCore/recipes/$component_name-$component_version.json
+```
+
+6. Deploy the component
+[.........]
+
+## Typical update cycle
+
+To fix a failed deployment:
+
+1. Go to Deployments in the console and remove the offending component from the deployment (check both thing and group level). Deploy.  This will remove the component from the target.
+
+2. Delete the component definition in the console
+
+3. Update the artifacts and push to S3
+
+4. Re-Create the component definition (as this will take a hash from the artifacts). (alternatively, it should be possible to create a new version)
+
+5. Add the newly, re-created component to the deployment and deploy.
+
+_It can be very handy to turn off the Rollback feature on failure to see what was captured/expanded_
+
+
+## more notes
+
+* needed to give the ggc_user write privileges over ~ggc_user to install virtualenv, etc.
