@@ -6,9 +6,28 @@ import numpy as np
 import os
 import time
 
+import IPCUtils as ipcutil
+from labels import labels
+from awscrt.io import (
+    ClientBootstrap,
+    DefaultHostResolver,
+    EventLoopGroup,
+    SocketDomain,
+    SocketOptions,
+)
+from awsiot.eventstreamrpc import Connection, LifecycleHandler, MessageAmendment
+from awsiot.greengrasscoreipc.model import PublishToIoTCoreRequest
+import awsiot.greengrasscoreipc.client as client
+
+ipc_utils = ipcutil.IPCUtils()
+connection = ipc_utils.connect()
+ipc_client = client.GreengrassCoreIPCClient(connection)
+
 
 max_frame_rate = 30
 source_file = '/tmp/data/frame.jpg'
+
+topic = "demo/topic"
 
 
 # load model
@@ -59,6 +78,9 @@ def make_message(label, boxes):
 
 def send_message(msg):
     print(msg)
+    ipc_client.new_publish_to_iot_core().activate(
+               request=PublishToIoTCoreRequest(topic_name=topic, qos='0',
+                                            payload=json.dumps(payload).encode()))
 
 start = time.time()
 frame_cnt = 0
