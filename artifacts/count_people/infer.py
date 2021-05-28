@@ -1,4 +1,5 @@
 from gluoncv import model_zoo, data, utils
+import json
 import mxnet as mx
 from mxnet import image
 import numpy as np
@@ -42,28 +43,52 @@ def predict(filename, network):
     return class_IDs, scores, bounding_boxes
 
 
-def count_objects(network, class_ids, scores, bounding_boxes, object_label, threshold=0.75):
-    count = sum((scores[0,:,0] > threshold)*(class_ids[0,:,0] == network.classes.index(object_label)))
+def get_object_boxes(network, class_ids, scores, bounding_boxes, object_label, threshold=0.75):
+    good_scores = (scores[0,:,0] > threshold)
+    good_classes = (class_ids[0,:,0] == network.classes.index(object_label))
 
-    return count.asscalar()
+    boxes = bounding_boxes[0,:,:].asnumpy()[(good_scores.asnumpy()*good_classes.asnumpy()) > 0]
 
+    return boxes
+
+def make_message(label, boxes):
+    d = { "Label": label,
+          "Bounding_Boxes": boxes }
+
+    return json.dumps(d)
+
+def send_message(msg):
+    print(msg)
 
 start = time.time()
 frame_cnt = 0
+filename = ""
 while True:
     try:
         filename = capture_file(source_file)      
         class_IDs, scores, bounding_boxes = predict(filename, net)
         os.remove(filename)
 
-        num_ppl = count_objects(net, class_IDs, scores, bounding_boxes, "person")
+        ppl_boxes = get_object_boxes(net, class_IDs, scores, bounding_boxes, "person")
+        send_message(make_message("person", ppl_boxes.tolist()))
 
         frame_cnt += 1
 
         dur = time.time() - start
         # print(f"\r{frame_cnt/dur:05.3f} FPS -- {num_ppl} Persons", end="", flush=True)
-        print(f"\r{frame_cnt/dur:05.3f} FPS -- {num_ppl} Persons") 
+        print(f"\r{frame_cnt/dur:05.3f} FPS -- {ppl_boxes.shape[0]} Persons") 
         
 
     except Exception as e:
         print(e)
+
+    finally: 
+        try:
+            os.remove(filename)
+        except Exception as e:
+            pass
+
+try:
+    os.remove(filename)
+except Exception as e:
+    pass
