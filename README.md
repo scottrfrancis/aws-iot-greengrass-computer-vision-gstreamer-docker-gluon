@@ -227,8 +227,11 @@ And enter the following content for the recipe, replacing <paste_bucket_name_her
         "Install": {
           "Script": "docker load -i {artifacts:path}/<container-name>.tar.gz"
         },
-        "Run": {
-          "Script": "docker run -d -v /tmp/data:/data --user \"$(id -u):$(id -g)\" <container-name>"
+        "Startup": {
+          "Script": "docker run --rm -d -v /tmp/data:/data --user \"$(id -u):$(id -g)\" --name=<container-name> <container-name>"
+        },
+        "Shutdown": {
+          "Script": "docker stop <container-name>"
         }
       },
       "Artifacts": [
