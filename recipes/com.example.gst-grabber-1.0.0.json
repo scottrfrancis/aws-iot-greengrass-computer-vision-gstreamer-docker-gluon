@@ -1,0 +1,30 @@
+{
+    "RecipeFormatVersion": "2020-01-25",
+    "ComponentName": "com.example.gst-grabber",
+    "ComponentVersion": "1.0.0",
+    "ComponentDescription": "A component that runs a Docker container from an image in an S3 bucket.",
+    "ComponentPublisher": "Amazon",
+    "Manifests": [
+      {
+        "Platform": {
+          "os": "linux"
+        },
+        "Lifecycle": {
+          "Install": {
+            "Script": "docker load -i {artifacts:path}/gst.tar.gz"
+          },
+          "Startup": {
+            "Script": "docker run --rm -d -v /tmp/data:/data --user \"$(id -u):$(id -g)\" --name gst gst"
+          },
+          "Shutdown": {
+            "Script": "docker stop gst"
+          }
+        },
+        "Artifacts": [
+          {
+            "URI": "s3://greengrass-component-artifacts-119690479916-us-west-2/artifacts/com.example.gst-grabber/1.0.0/gst.tar.gz"
+          }
+        ]
+      }
+    ]
+  }

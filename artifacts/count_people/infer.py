@@ -6,8 +6,14 @@ import numpy as np
 import os
 import time
 
+
+# debug harness
+# if os.getenv("AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT") == None:
+#     print("setting socket for debug")
+#     os.environ["AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT"] = "/greengrass/v2/ipc.socket"
+
 import IPCUtils as ipcutil
-from labels import labels
+# from labels import labels
 from awscrt.io import (
     ClientBootstrap,
     DefaultHostResolver,
@@ -19,13 +25,16 @@ from awsiot.eventstreamrpc import Connection, LifecycleHandler, MessageAmendment
 from awsiot.greengrasscoreipc.model import PublishToIoTCoreRequest
 import awsiot.greengrasscoreipc.client as client
 
+
+print("loading the IPC Client")
 ipc_utils = ipcutil.IPCUtils()
 connection = ipc_utils.connect()
 ipc_client = client.GreengrassCoreIPCClient(connection)
-
+print("loaded")
 
 max_frame_rate = 30
 source_file = '/tmp/data/frame.jpg'
+# source_file = '/tmp/data/save.jpg'
 
 topic = "demo/topic"
 
@@ -40,7 +49,7 @@ def capture_file(src_file, timeout=1):
     while not os.path.exists(source_file):
         time.sleep(1/max_frame_rate)
         if time.time() > start + timeout:
-            raise Exception("source file doesn't exist within timeout") 
+            raise Exception(f"source {src_file} doesn't exist within timeout") 
 
     ms_count = int((time.time() %1)*1000)
     path_parts = list(os.path.split(source_file))
@@ -70,9 +79,11 @@ def get_object_boxes(network, class_ids, scores, bounding_boxes, object_label, t
 
     return boxes
 
-def make_message(label, boxes):
+def make_message(label, boxes, frame_rate):
     d = { "Label": label,
-          "Bounding_Boxes": boxes }
+          "Count": len(boxes),
+          "Bounding_Boxes": boxes,
+          "Frame_Rate": frame_rate }
 
     return json.dumps(d)
 
@@ -80,7 +91,7 @@ def send_message(msg):
     print(msg)
     ipc_client.new_publish_to_iot_core().activate(
                request=PublishToIoTCoreRequest(topic_name=topic, qos='0',
-                                            payload=json.dumps(payload).encode()))
+                                            payload=msg.encode()))
 
 start = time.time()
 frame_cnt = 0
@@ -92,13 +103,12 @@ while True:
         os.remove(filename)
 
         ppl_boxes = get_object_boxes(net, class_IDs, scores, bounding_boxes, "person")
-        send_message(make_message("person", ppl_boxes.tolist()))
-
         frame_cnt += 1
+        frame_rate = frame_cnt/(time.time() - start)
 
-        dur = time.time() - start
+        send_message(make_message("person", ppl_boxes.tolist(), frame_rate))
         # print(f"\r{frame_cnt/dur:05.3f} FPS -- {num_ppl} Persons", end="", flush=True)
-        print(f"\r{frame_cnt/dur:05.3f} FPS -- {ppl_boxes.shape[0]} Persons") 
+        print(f"\r{frame_rate:05.3f} FPS -- {ppl_boxes.shape[0]} Persons") 
         
 
     except Exception as e:

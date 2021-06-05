@@ -1,0 +1,36 @@
+{
+    "RecipeFormatVersion": "2020-01-25",
+    "ComponentName": "com.example.count_people",
+    "ComponentVersion": "1.0.0",
+    "ComponentDescription": "A component that runs an inference model to count people.",
+    "ComponentPublisher": "Amazon",
+    "ComponentConfiguration": {
+      "DefaultConfiguration": {
+        "accessControl": {
+          "aws.greengrass.ipc.mqttproxy": {
+            "com.example.Pub:publisher:1" :{
+              "policyDescription": "publish results to topic",
+              "operations": [
+                "aws.greengrass#PublishToIoTCore"
+              ],
+              "resources": [
+                "demo/topic"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "Manifests": [
+      {
+        "Platform": {
+          "os": "linux"
+        },
+        "Lifecycle": {
+          "Run": {
+            "Script": "{artifacts:path}/infer.sh"
+          }
+        }
+      }
+    ]
+  }

@@ -1,2 +1,5 @@
+awscrt
+awsiotsdk
 gluoncv 
+labels
 mxnet
