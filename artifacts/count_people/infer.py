@@ -6,12 +6,6 @@ import numpy as np
 import os
 import time
 
-
-# debug harness
-# if os.getenv("AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT") == None:
-#     print("setting socket for debug")
-#     os.environ["AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT"] = "/greengrass/v2/ipc.socket"
-
 import IPCUtils as ipcutil
 # from labels import labels
 from awscrt.io import (
@@ -26,18 +20,33 @@ from awsiot.greengrasscoreipc.model import PublishToIoTCoreRequest
 import awsiot.greengrasscoreipc.client as client
 
 
-print("loading the IPC Client")
-ipc_utils = ipcutil.IPCUtils()
-connection = ipc_utils.connect()
-ipc_client = client.GreengrassCoreIPCClient(connection)
-print("loaded")
-
-max_frame_rate = 30
 source_file = '/tmp/data/frame.jpg'
-# source_file = '/tmp/data/save.jpg'
-
 topic = "demo/topic"
 
+
+
+def print_msg_to_stdout(msg, topic=topic, qos=0):
+    print(msg)
+
+def publish_to_iot_core(msg, topic=topic, qos=0):
+    print_msg_to_stdout(msg)
+    ipc_client.new_publish_to_iot_core().activate(
+               request=PublishToIoTCoreRequest(topic_name=topic, qos=qos,
+                                            payload=msg.encode()))
+
+# debug mock injection
+send_message = publish_to_iot_core
+if os.getenv("AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT") == None:
+    send_message = print_msg_to_stdout
+    source_file = '/tmp/data/save.jpg'
+else:
+    print("loading the IPC Client")
+    ipc_utils = ipcutil.IPCUtils()
+    connection = ipc_utils.connect()
+    ipc_client = client.GreengrassCoreIPCClient(connection)
+    print("loaded")
+
+    max_frame_rate = 30
 
 # load model
 ctx = mx.cpu()
@@ -87,11 +96,6 @@ def make_message(label, boxes, frame_rate):
 
     return json.dumps(d)
 
-def send_message(msg):
-    print(msg)
-    ipc_client.new_publish_to_iot_core().activate(
-               request=PublishToIoTCoreRequest(topic_name=topic, qos='0',
-                                            payload=msg.encode()))
 
 start = time.time()
 frame_cnt = 0
@@ -107,8 +111,6 @@ while True:
         frame_rate = frame_cnt/(time.time() - start)
 
         send_message(make_message("person", ppl_boxes.tolist(), frame_rate))
-        # print(f"\r{frame_cnt/dur:05.3f} FPS -- {num_ppl} Persons", end="", flush=True)
-        print(f"\r{frame_rate:05.3f} FPS -- {ppl_boxes.shape[0]} Persons") 
         
 
     except Exception as e:
