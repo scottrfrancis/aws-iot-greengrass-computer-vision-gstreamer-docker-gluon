@@ -7,4 +7,28 @@ echo "thispath: $thispath"
 
 source ~/gcv/bin/activate
 
-python3 $thispath/infer.py -c person -m ssd_512_resnet50_v1_voc -r 0.1 -s /tmp/data/frame.jpg -t demo/topic -z 0.75
+while getopts ":c:m:r:s:t:z:" o ; do
+    case "${o}" in 
+        c)
+            class_name=${OPTARG}
+            ;;
+        m)
+            model_name=${OPTARG}
+            ;;
+        r)
+            frame_rate=${OPTARG}
+            ;;
+        s)
+            source_file=${OPTARG}
+            ;;
+        t)
+            topic_name=${OPTARG}
+            ;;
+        z)
+            threshold=${OPTARG}
+            ;;
+    esac
+done
+
+
+python3 $thispath/infer.py -c $class_name -m $model_name -r $frame_rate -s $source_file -t $topic_name -z $threshold

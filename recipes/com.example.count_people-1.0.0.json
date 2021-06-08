@@ -18,7 +18,13 @@
               ]
             }
           }
-        }
+        },
+        "ModelName": "ssd_512_resnet50_v1_voc",
+        "ClassName": "person",
+        "Threshold": "0.75",
+        "SourceFile": "/tmp/data/frame.jpg",
+        "FrameRate": "0.1",
+        "Topic": "demo/topic"
       }
     },
     "Manifests": [
@@ -27,10 +33,20 @@
           "os": "linux"
         },
         "Lifecycle": {
+          "Install": {
+            "Script": "cd {artifacts:decompressedPath}/install.sh",
+            "timeout": "900"
+          },          
           "Run": {
-            "Script": "{artifacts:path}/infer.sh"
+            "Script": "{artifacts:decompressedPath}/infer.sh -m {configuration:/ModelName} -c {configuration:/ClassName} -z {configuration:/Threshold} -s {configuration:/SourceFile} -r {configuration:/FrameRate} -t {configuration:/Topic}"
           }
-        }
+        },
+        "Artifacts": [
+          {
+            "URI": "s3://greengrass-component-artifacts-119690479916-us-west-2/artifacts/com.example.count_people/1.0.0/com.example.count_people.zip",
+            "Unarchive": "ZIP"
+          }
+        ]
       }
     ]
   }
