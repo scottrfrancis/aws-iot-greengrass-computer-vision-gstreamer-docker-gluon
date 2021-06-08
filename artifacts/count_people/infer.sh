@@ -7,7 +7,4 @@ echo "thispath: $thispath"
 
 source ~/gcv/bin/activate
 
-# [[ -z "${"AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT"}" ]] && export AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT="/greengrass/v2/ipc.socket"
-# echo "hostname: $AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT"
-
-python3 $thispath/infer.py
+python3 $thispath/infer.py -c person -m ssd_512_resnet50_v1_voc -r 0.1 -s /tmp/data/frame.jpg -t demo/topic -z 0.75

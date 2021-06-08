@@ -1,3 +1,4 @@
+import argparse
 from gluoncv import model_zoo, data, utils
 import json
 import mxnet as mx
@@ -19,11 +20,33 @@ from awsiot.eventstreamrpc import Connection, LifecycleHandler, MessageAmendment
 from awsiot.greengrasscoreipc.model import PublishToIoTCoreRequest
 import awsiot.greengrasscoreipc.client as client
 
+# remote debug harness -- uncomment to use
+# import ptvsd
+# import socket
+# this_ip = (([ip for ip in socket.gethostbyname_ex(socket.gethostname())[2] if not ip.startswith("127.")] or [[(s.connect(("8.8.8.8", 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]]) + ["no IP found"])[0]
+# ptvsd.enable_attach(address=(this_ip,3000), redirect_output=True)
+# ptvsd.wait_for_attach()
+# end debug harness
 
-source_file = '/tmp/data/frame.jpg'
-topic = "demo/topic"
 
+# Read in command-line parameters
+parser = argparse.ArgumentParser()
+parser.add_argument("-c", "--class", action="store", required=False, dest="class_name", default="person", help="class name to collection from predictions")
+parser.add_argument("-m", "--model", action="store", required=False, dest="model", default="ssd_512_resnet50_v1_voc", help="model name from gluon zoo")
+parser.add_argument("-r", "--rate", action="store", required=False, dest="rate", default="0.5", help="max frames per second to predict")
+parser.add_argument("-s", "--source", action="store", required=False, dest="source", default="/tmp/data/frame.jpg", help="source file to read")
+parser.add_argument("-t", "--topic", action="store", required=False, dest="topic", default="demo/topic", help="topic to report predictions")
+parser.add_argument("-z", "--threshold", action="store", required=False, dest="threshold", default="0.75", help="confidence threshold")
+# set globals from args
+args = parser.parse_args()
+topic = args.topic
+source_file = args.source
+model_name = args.model
+max_frame_rate = float(args.rate)
+class_name = args.class_name
+threshold = float(args.threshold)
 
+print(f"using {json.dumps(args.__dict__)}")
 
 def print_msg_to_stdout(msg, topic=topic, qos=0):
     print(msg)
@@ -38,7 +61,6 @@ def publish_to_iot_core(msg, topic=topic, qos=0):
 send_message = publish_to_iot_core
 if os.getenv("AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT") == None:
     send_message = print_msg_to_stdout
-    source_file = '/tmp/data/save.jpg'
 else:
     print("loading the IPC Client")
     ipc_utils = ipcutil.IPCUtils()
@@ -46,20 +68,24 @@ else:
     ipc_client = client.GreengrassCoreIPCClient(connection)
     print("loaded")
 
-    max_frame_rate = 30
 
 # load model
 ctx = mx.cpu()
-net = model_zoo.get_model('ssd_512_resnet50_v1_voc', pretrained=True, ctx=ctx)
+net = model_zoo.get_model(model_name, pretrained=True, ctx=ctx)
 
 
 def capture_file(src_file, timeout=1):
     start = time.time()
-    while not os.path.exists(source_file):
+
+    # wait for timeout, then check for source file availability
+    while True:
         time.sleep(1/max_frame_rate)
+        if os.path.exists(source_file):
+            break
         if time.time() > start + timeout:
             raise Exception(f"source {src_file} doesn't exist within timeout") 
 
+    # capture the source file by renaming to a new file. Using ms as suffix to file to minimize any collisions
     ms_count = int((time.time() %1)*1000)
     path_parts = list(os.path.split(source_file))
     file_parts = path_parts[-1].split('.')
@@ -68,6 +94,7 @@ def capture_file(src_file, timeout=1):
     path_parts[-1] = ".".join(file_parts)
 
     new_file = os.path.join(*path_parts)
+    # rename is atomic, so if this call succeeds, you can use the new file
     os.rename(source_file, new_file)
 
     return new_file
@@ -80,7 +107,7 @@ def predict(filename, network):
     return class_IDs, scores, bounding_boxes
 
 
-def get_object_boxes(network, class_ids, scores, bounding_boxes, object_label, threshold=0.75):
+def get_object_boxes(network, class_ids, scores, bounding_boxes, object_label, threshold=threshold):
     good_scores = (scores[0,:,0] > threshold)
     good_classes = (class_ids[0,:,0] == network.classes.index(object_label))
 
@@ -106,13 +133,12 @@ while True:
         class_IDs, scores, bounding_boxes = predict(filename, net)
         os.remove(filename)
 
-        ppl_boxes = get_object_boxes(net, class_IDs, scores, bounding_boxes, "person")
+        boxes = get_object_boxes(net, class_IDs, scores, bounding_boxes,class_name)
         frame_cnt += 1
         frame_rate = frame_cnt/(time.time() - start)
 
-        send_message(make_message("person", ppl_boxes.tolist(), frame_rate))
+        send_message(make_message(class_name, boxes.tolist(), frame_rate))
         
-
     except Exception as e:
         print(e)
 
