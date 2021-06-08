@@ -43,7 +43,7 @@
         },
         "Artifacts": [
           {
-            "URI": "s3://greengrass-component-artifacts-119690479916-us-west-2/artifacts/com.example.count_people/1.0.0/com.example.count_people.zip",
+            "URI": "s3://<paste_bucket_name_here>/artifacts/com.example.count_people/1.0.0/com.example.count_people.zip",
             "Unarchive": "ZIP"
           }
         ]
