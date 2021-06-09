@@ -1,6 +1,5 @@
 #!/bin/bash
 
-echo "hostname $AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT"
 fullcmd="$(realpath $0)" 
 thispath="$(dirname $fullcmd)"
 echo "thispath: $thispath"
